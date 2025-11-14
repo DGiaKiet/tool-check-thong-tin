@@ -22,6 +22,18 @@ except ImportError:
     print("[!] Pystyle không được cài đặt. Chạy: pip install pystyle")
     print("[*] Tool sẽ chạy ở chế độ cơ bản...\n")
 
+# Import Facebook lookup module (nếu có)
+try:
+    from facebook_phone_lookup import (
+        lookup_phone_from_facebook,
+        validate_facebook_url,
+        format_phone_vn,
+        get_carrier_info
+    )
+    FACEBOOK_MODULE_AVAILABLE = True
+except ImportError:
+    FACEBOOK_MODULE_AVAILABLE = False
+
 # ============================================
 # CONFIGURATION
 # ============================================
@@ -92,6 +104,7 @@ def print_menu():
     │  [6] Cài đặt                          │
     │  [7] Hướng dẫn                        │
     │  [8] Thông tin tool                   │
+    │  [9] Tra cứu SĐT qua Facebook ⭐     │
     │  [0] Thoát                            │
     │                                       │
     └───────────────────────────────────────┘
@@ -400,6 +413,131 @@ def feature_about():
     
     press_enter()
 
+def feature_facebook_lookup():
+    """Chức năng tra cứu SĐT qua Facebook"""
+    clear_screen()
+    print_banner()
+    print_colored("\n[*] TRA CỨU SỐ ĐIỆN THOẠI QUA FACEBOOK", Config.COLOR_SUCCESS)
+    
+    # Kiểm tra module có available không
+    if not FACEBOOK_MODULE_AVAILABLE:
+        print_colored("\n[!] Module facebook_phone_lookup.py không tìm thấy!", Config.COLOR_ERROR)
+        print("\nĐể sử dụng chức năng này:")
+        print("1. Đảm bảo file 'facebook_phone_lookup.py' ở cùng thư mục")
+        print("2. Hoặc cài đặt module riêng nếu có")
+        press_enter()
+        return
+    
+    print_colored("\n⚠️  LƯU Ý BẢO MẬT:", Config.COLOR_INFO)
+    print("• Chức năng này chỉ demo concept tra cứu")
+    print("• Không sử dụng cho mục đích xâm phạm privacy")
+    print("• Tuân thủ Terms of Service của Facebook")
+    print("• Chỉ tra cứu thông tin công khai và có permission\n")
+    
+    # Nhập Facebook URL
+    fb_url = input_with_prompt("\n[?] Nhập Facebook profile URL: ", Config.COLOR_INFO)
+    
+    if not fb_url.strip():
+        print_colored("\n[!] URL không được để trống!", Config.COLOR_ERROR)
+        press_enter()
+        return
+    
+    # Validate URL trước
+    print_colored("\n[*] Đang validate URL...", Config.COLOR_INFO)
+    is_valid, username, error = validate_facebook_url(fb_url)
+    
+    if not is_valid:
+        print_colored(f"\n[!] URL không hợp lệ: {error}", Config.COLOR_ERROR)
+        press_enter()
+        return
+    
+    print_colored(f"[✓] URL hợp lệ - Username/ID: {username}", Config.COLOR_SUCCESS)
+    
+    # Chọn method
+    print("\n┌────────────────────────────────────┐")
+    print("│  CHỌN PHƯƠNG THỨC TRA CỨU:        │")
+    print("├────────────────────────────────────┤")
+    print("│  [1] Demo (dữ liệu mẫu)           │")
+    print("│  [2] API (cần Facebook API key)   │")
+    print("│  [3] Scraping (không khuyến khích)│")
+    print("└────────────────────────────────────┘")
+    
+    method_choice = input_with_prompt("\n[?] Chọn phương thức (1-3): ", Config.COLOR_INFO)
+    
+    method_map = {
+        '1': 'demo',
+        '2': 'api',
+        '3': 'scrape'
+    }
+    
+    method = method_map.get(method_choice, 'demo')
+    
+    # Thực hiện tra cứu
+    show_loading(f"Đang tra cứu qua {method}...", 3)
+    
+    result = lookup_phone_from_facebook(fb_url, method=method)
+    
+    # Hiển thị kết quả
+    if result['success']:
+        phones = result.get('phones', [])
+        
+        if phones:
+            output = f"""
+    ┌─────────────────────────────────────────────┐
+    │           KẾT QUẢ TRA CỨU                   │
+    ├─────────────────────────────────────────────┤
+    │  URL: {fb_url[:35]}...
+    │  Username: {result.get('username', 'N/A')}
+    │  Method: {result.get('method', 'N/A').upper()}
+    │                                             │
+    │  SỐ ĐIỆN THOẠI TÌM THẤY:                   │"""
+            
+            for i, phone in enumerate(phones, 1):
+                formatted = format_phone_vn(phone)
+                carrier = get_carrier_info(phone)
+                output += f"""
+    │  [{i}] {formatted} ({carrier})"""
+            
+            output += f"""
+    │                                             │
+    │  Thời gian: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}
+    └─────────────────────────────────────────────┘
+            """
+            print_colored(output, Config.COLOR_SUCCESS)
+            
+            # Hiển thị note nếu có
+            if 'note' in result:
+                print_colored(f"\n{result['note']}", Config.COLOR_INFO)
+        else:
+            print_colored(f"""
+    ┌─────────────────────────────────────────────┐
+    │           KẾT QUẢ TRA CỨU                   │
+    ├─────────────────────────────────────────────┤
+    │  URL: {fb_url[:35]}...
+    │  Username: {result.get('username', 'N/A')}
+    │                                             │
+    │  ⚠️  KHÔNG TÌM THẤY SỐ ĐIỆN THOẠI          │
+    │                                             │
+    │  Lý do có thể:                              │
+    │  • Thông tin không công khai                │
+    │  • Profile đã ẩn số điện thoại             │
+    │  • Cần permissions để truy cập             │
+    └─────────────────────────────────────────────┘
+            """, Config.COLOR_INFO)
+            
+            if 'note' in result:
+                print_colored(f"\n{result['note']}", Config.COLOR_INFO)
+            if 'message' in result:
+                print_colored(f"{result['message']}", Config.COLOR_INFO)
+    else:
+        error_msg = result.get('error', 'Unknown error')
+        print_colored(f"\n[!] TRA CỨU THẤT BẠI: {error_msg}", Config.COLOR_ERROR)
+        
+        if 'note' in result:
+            print_colored(f"\n{result['note']}", Config.COLOR_INFO)
+    
+    press_enter()
+
 # ============================================
 # MAIN FUNCTION
 # ============================================
@@ -421,7 +559,7 @@ def main():
             print_menu()
             
             # Nhận lựa chọn từ người dùng
-            choice = input_with_prompt("\n[?] Chọn chức năng (0-8): ", Config.COLOR_INFO)
+            choice = input_with_prompt("\n[?] Chọn chức năng (0-9): ", Config.COLOR_INFO)
             
             # Xử lý lựa chọn
             if choice == "1":
@@ -440,6 +578,8 @@ def main():
                 feature_help()
             elif choice == "8":
                 feature_about()
+            elif choice == "9":
+                feature_facebook_lookup()
             elif choice == "0":
                 clear_screen()
                 print_banner()
@@ -447,7 +587,7 @@ def main():
                 print_colored("[*] Tạm biệt! 👋\n", Config.COLOR_SUCCESS, interval=0.02)
                 break
             else:
-                print_colored("\n[!] Lựa chọn không hợp lệ! Vui lòng chọn 0-8.", Config.COLOR_ERROR)
+                print_colored("\n[!] Lựa chọn không hợp lệ! Vui lòng chọn 0-9.", Config.COLOR_ERROR)
                 press_enter()
                 
         except KeyboardInterrupt:
